@@ -178,14 +178,12 @@ def evaluate_row(cpslist, count, ts, cli_vars):
 
     cps = count/interval
 
-    if count > 1:
-        if cps > lowcps and cps < highcps:
+    if count > 1 and cps > lowcps and cps < highcps:
+        # Add entry to cpslist array and set the highlight for
+        # when it's printed.
 
-            # Add entry to cpslist array and set the highlight for
-            # when it's printed.
-
-            cpslist.append(cps)
-            highlight = '** '
+        cpslist.append(cps)
+        highlight = '** '
 
     if not suppress:
         print(f'{highlight}{ts} cps is {cps}')
@@ -215,11 +213,8 @@ def main():
             print_results(cpslist, cli_vars)
 
     except UnicodeDecodeError as errmsg:
-        sys.exit('ERROR: file: {}, line: {}; {}'.format(
-            fname, reader.line_num, errmsg))
-    except FileNotFoundError as errmsg:
-        sys.exit(errmsg)
-    except PermissionError as errmsg:
+        sys.exit(f'ERROR: file: {fname}, line: {reader.line_num}; {errmsg}')
+    except (FileNotFoundError, PermissionError) as errmsg:
         sys.exit(errmsg)
 
 
@@ -231,21 +226,13 @@ def print_results(cpslist, cli_vars):
 
     interface = cli_vars['interface']
     proto = cli_vars['protocol']
-    zone = cli_vars['zone']
+    if zone := cli_vars['zone']:
+        header = f'zone={zone}'
+    else:
+        header = f'interface={interface}'
 
-    # Print banners and stats.
-
-    if cpslist:
-
-        # Determine which header to use.
-
-        if zone:
-            header = f'zone={zone}'
-        else:
-            header = f'interface={interface}'
-
-        print(f'CPS Stats for {header} and protocol={proto}')
-        print_stats(cpslist, header)
+    print(f'CPS Stats for {header} and protocol={proto}')
+    print_stats(cpslist, header)
 
 
 def print_stats(cpslist, header):
@@ -326,8 +313,7 @@ def process_csvfile(reader, cli_vars):
                 cpsdict[compressed_ts] = 1
 
     except csv.Error as errmsg:
-        sys.exit('ERROR: file: {}, line: {}; {}'.format(
-            fname, reader.line_num, errmsg))
+        sys.exit(f'ERROR: file: {fname}, line: {reader.line_num}; {errmsg}')
 
     return cpsdict
 
@@ -340,8 +326,6 @@ def skip_row(row, interface, proto, zone):
     Returns False if row should NOT be skipped.
 
     '''
-
-    IP_PROTO = 'IP Protocol'
 
     # Set row_key and target depending on whether we are searching for
     # an interface or a zone.
@@ -361,13 +345,13 @@ def skip_row(row, interface, proto, zone):
     if proto == 'all':
         return False
 
-    if proto == 'other' and row[IP_PROTO] not in PROTO_LIST:
-        return False
+    IP_PROTO = 'IP Protocol'
 
-    if proto == row[IP_PROTO]:
-        return False
-
-    return True
+    return (
+        False
+        if proto == 'other' and row[IP_PROTO] not in PROTO_LIST
+        else proto != row[IP_PROTO]
+    )
 
 
 if __name__ == "__main__":
